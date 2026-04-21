@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Routing AI Training</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #f4f4f9;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+      }
+      .card {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 450px;
+        text-align: center;
+      }
+      input,
+      button {
+        width: 100%;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
+        font-size: 16px;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      .vehicle-btn {
+        background: #e9ecef;
+        color: #333;
+        margin: 4px 0;
+        border: 2px solid transparent;
+      }
+      .vehicle-btn.selected {
+        background: #e6f4ea;
+        border-color: #28a745;
+        color: #155724;
+      }
+      .data-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        text-align: left;
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-size: 14px;
+      }
+      .full-width {
+        grid-column: span 2;
+      }
+      .hidden {
+        display: none;
+      }
+      .progress {
+        font-size: 12px;
+        color: #666;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="login-screen" class="card">
+      <h2>Dispatcher Login</h2>
+      <p>Enter your email to start routing.</p>
+      <input
+        type="email"
+        id="email-input"
+        placeholder="name@company.com"
+        required
+      />
+      <button onclick="login()">Start Training</button>
+    </div>
+
+    <div id="task-screen" class="card hidden">
+      <h3 style="margin-top: 0; color: #333">Order Details</h3>
+      <div class="data-grid" id="data-display"></div>
+
+      <h4 style="margin-bottom: 8px">Assign Vehicles (Multi-Select)</h4>
+      <div id="vehicle-options">
+        <button class="vehicle-btn" onclick="toggleVehicle(this, 'commuter')">
+          Commuter
+        </button>
+        <button class="vehicle-btn" onclick="toggleVehicle(this, 'bike')">
+          Bike
+        </button>
+        <button class="vehicle-btn" onclick="toggleVehicle(this, 'car')">
+          Car
+        </button>
+        <button class="vehicle-btn" onclick="toggleVehicle(this, 'truck')">
+          Truck
+        </button>
+      </div>
+
+      <button style="margin-top: 20px" onclick="submitTask()">
+        Submit Assignment
+      </button>
+      <div class="progress" id="progress-text"></div>
+    </div>
+
+    <div id="complete-screen" class="card hidden">
+      <h2>🎉 All Done!</h2>
+      <p id="complete-message"></p>
+    </div>
+
+    <script>
+      let currentUser = "";
+      let currentTask = null;
+      let selectedVehicles = new Set();
+
+      async function login() {
+        const email = document.getElementById("email-input").value;
+        if (!email) return alert("Please enter your email");
+        currentUser = email;
+        document.getElementById("login-screen").classList.add("hidden");
+        loadNextTask();
+      }
+
+      async function loadNextTask() {
+        selectedVehicles.clear();
+        document
+          .querySelectorAll(".vehicle-btn")
+          .forEach((b) => b.classList.remove("selected"));
+
+        const res = await fetch(`/task/${currentUser}`);
+        const data = await res.json();
+
+        if (data.status === "complete") {
+          document.getElementById("task-screen").classList.add("hidden");
+          document.getElementById("complete-screen").classList.remove("hidden");
+          document.getElementById("complete-message").innerText = data.message;
+          return;
+        }
+
+        currentTask = data.task;
+        document.getElementById("task-screen").classList.remove("hidden");
+        document.getElementById("progress-text").innerText =
+          `Completed: ${data.progress} / 1000`;
+
+        // Maps exactly to your requested CSV headers
+        const grid = document.getElementById("data-display");
+        grid.innerHTML = `
+            <div class="full-width"><strong>Description:</strong> ${currentTask.description}</div>
+            <div><strong>Weight:</strong> ${currentTask.weight}</div>
+            <div><strong>Distance:</strong> ${currentTask.distance}</div>
+            <div><strong>Packages:</strong> ${currentTask.no_of_package}</div>
+            <div><strong>Value:</strong> ${currentTask.package_value}</div>
+            <div><strong>Type:</strong> <br>${currentTask.package_type}</div>
+            <div class="full-width"><strong>Handling Tags:</strong> <br>${currentTask.handling_tag}</div>
+        `;
+      }
+
+      function toggleVehicle(btn, vehicle) {
+        if (selectedVehicles.has(vehicle)) {
+          selectedVehicles.delete(vehicle);
+          btn.classList.remove("selected");
+        } else {
+          selectedVehicles.add(vehicle);
+          btn.classList.add("selected");
+        }
+      }
+
+      async function submitTask() {
+        if (selectedVehicles.size === 0)
+          return alert("Select at least one vehicle.");
+
+        const policyArray = Array.from(selectedVehicles).join(",");
+
+        await fetch("/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: currentUser,
+            delivery_id: currentTask.delivery_id,
+            policy: policyArray,
+          }),
+        });
+
+        loadNextTask();
+      }
+    </script>
+  </body>
+</html>
